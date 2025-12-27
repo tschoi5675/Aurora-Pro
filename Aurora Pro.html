@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aurora Pro Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
+        
+        :root {
+            --bg-color: #020617;
+            --text-color: #f8fafc;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --accent: #10b981;
+        }
+
+        /* Red Light / Night Vision Mode */
+        .red-mode {
+            --bg-color: #110000;
+            --text-color: #ff0000;
+            --glass-bg: rgba(255, 0, 0, 0.05);
+            --border-color: rgba(255, 0, 0, 0.2);
+            --accent: #ff0000;
+        }
+        .red-mode .text-emerald-500, .red-mode .bg-emerald-600 { color: #ff0000 !important; background-color: transparent !important; border: 1px solid #ff0000; }
+        .red-mode svg { filter: sepia(100%) saturate(500%) hue-rotate(-50deg); }
+        .red-mode .score-glow { background-color: #ff0000 !important; opacity: 0.1; }
+
+        .light-mode {
+            --bg-color: #f1f5f9;
+            --text-color: #0f172a;
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --border-color: rgba(0, 0, 0, 0.05);
+        }
+
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            overflow-x: hidden; 
+            -webkit-tap-highlight-color: transparent; 
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+        }
+        
+        .score-glow {
+            filter: blur(80px);
+            transition: background-color 1s ease;
+            z-index: 0;
+        }
+
+        .good-pulse { animation: pulse-green 2s infinite; }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .tab-active { color: var(--accent); }
+        .tab-active svg { transform: scale(1.1); }
+
+        .page-content { transition: transform 0.3s ease, opacity 0.3s ease; }
+        .hidden-tab { display: none; opacity: 0; }
+
+        #nerd-drawer {
+            transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+            transform: translateY(100%);
+        }
+        #nerd-drawer.open {
+            transform: translateY(0);
+        }
+
+        .signal-blink { animation: blink 1.2s infinite; }
+        @keyframes blink { 50% { opacity: 0.2; } }
+
+        .flashlight-overlay {
+            position: fixed;
+            inset: 0;
+            background: white;
+            z-index: 9999;
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Emergency Flashlight Overlay -->
+    <div id="flashlight" class="flashlight-overlay" onclick="toggleFlashlight()"></div>
+
+    <div class="max-w-md mx-auto p-6 pb-40 relative z-10">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 class="text-2xl font-black italic uppercase tracking-tighter decoration-emerald-500 underline decoration-4 underline-offset-8">
+                    AURORA<span class="text-emerald-500 font-black">PRO</span>
+                </h1>
+                <div class="flex items-center gap-2 mt-3">
+                    <div id="signal-dot" class="w-2 h-2 rounded-full bg-slate-400"></div>
+                    <p id="location-text" class="text-[10px] font-bold uppercase tracking-widest opacity-40">Locating...</p>
+                </div>
+            </div>
+            
+            <div class="flex gap-2">
+                <!-- Woodland Tools -->
+                <button onclick="toggleRedMode()" class="p-3 glass rounded-2xl active:scale-90 transition-all" title="Night Vision">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+                <button onclick="toggleFlashlight()" class="p-3 glass rounded-2xl active:scale-90 transition-all" title="Emergency Light">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 2 3 11-8-4 11-3-3 11 8-4-11 3Z"/></svg>
+                </button>
+                <button onclick="toggleTheme()" class="p-3 glass rounded-2xl active:scale-90 transition-all">
+                    <svg id="theme-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Live Content -->
+        <div id="live-page" class="page-content">
+            <div class="text-center mb-10 relative">
+                <div id="bg-glow" class="score-glow absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 opacity-20 rounded-full bg-slate-800"></div>
+                <div class="relative z-10">
+                    <span id="main-score" class="text-[10rem] font-black tracking-tighter tabular-nums leading-none">--</span>
+                    <div class="text-[11px] font-black uppercase tracking-[0.5em] opacity-30 mt-2">Chance Index</div>
+                    <div id="quick-tip" class="text-[10px] mt-8 font-black bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 inline-block px-6 py-2.5 rounded-full uppercase tracking-widest">Awaiting Data</div>
+                </div>
+            </div>
+
+            <!-- Restored Primary Dashboard Grid -->
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass p-6 rounded-[2.5rem]">
+                    <p class="text-[10px] font-black opacity-40 uppercase mb-2 tracking-widest">Kp Index</p>
+                    <h2 id="kp-val" class="text-4xl font-black tabular-nums tracking-tighter">0.0</h2>
+                </div>
+                <div id="bz-card" class="glass p-6 rounded-[2.5rem] transition-all duration-500">
+                    <p class="text-[10px] font-black opacity-40 uppercase mb-2 tracking-widest">Mag Bz</p>
+                    <h2 id="bz-val" class="text-4xl font-black tabular-nums tracking-tighter">0.0</h2>
+                </div>
+                <!-- Solar ETA (New Feature integrated into layout) -->
+                <div class="glass col-span-2 p-6 rounded-[2.5rem] flex items-center justify-between">
+                    <div>
+                        <p class="text-[10px] font-black opacity-40 uppercase tracking-widest">Solar Wind ETA</p>
+                        <p class="text-[9px] opacity-20 uppercase font-bold">Time from L1 Satellite to Earth</p>
+                    </div>
+                    <h2 id="eta-val" class="text-4xl font-black tabular-nums tracking-tighter">--<span class="text-sm ml-1 opacity-30">m</span></h2>
+                </div>
+            </div>
+        </div>
+
+        <!-- Forecast Content -->
+        <div id="forecast-page" class="page-content hidden-tab">
+            <div class="glass p-8 rounded-[3rem] mb-6 border border-white/5">
+                <h3 class="text-[11px] font-black uppercase opacity-30 tracking-[0.4em] mb-10">72-Hour Arrival Windows</h3>
+                <div id="forecast-list" class="space-y-10">
+                    <div class="text-center py-12 opacity-20 text-[10px] font-black uppercase">Scanning Solar Cycles...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- The Nerd Drawer (Restored Detailed Stats) -->
+    <div id="nerd-drawer" class="fixed inset-x-0 bottom-0 z-40 h-[70vh] glass rounded-t-[3rem] p-8 border-t border-emerald-500/20 shadow-[0_-20px_50px_rgba(0,0,0,0.3)]">
+        <div class="w-12 h-1.5 bg-slate-500/20 rounded-full mx-auto mb-8" onclick="toggleNerdDrawer()"></div>
+        <h3 class="text-[11px] font-black uppercase tracking-[0.4em] opacity-40 mb-8">Advanced Telemetry</h3>
+        
+        <div class="space-y-6">
+            <div class="glass p-6 rounded-3xl">
+                <div class="flex justify-between items-center mb-6">
+                    <p class="text-[10px] font-black uppercase tracking-widest text-emerald-500">Bz Magnetic Flux</p>
+                    <span class="text-[9px] font-mono opacity-30">L1 Lagrange Stream</span>
+                </div>
+                <div id="graph-container" class="h-24 flex items-end gap-[3px]"></div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div class="glass p-5 rounded-3xl">
+                    <p class="text-[9px] font-black opacity-40 uppercase mb-1">Wind Speed</p>
+                    <p id="speed-val" class="text-xl font-black tabular-nums">---</p>
+                </div>
+                <div class="glass p-5 rounded-3xl">
+                    <p class="text-[9px] font-black opacity-40 uppercase mb-1">Cloud Cover</p>
+                    <p id="cloud-val" class="text-xl font-black tabular-nums">--%</p>
+                </div>
+            </div>
+        </div>
+        
+        <button onclick="updateData()" class="mt-8 w-full bg-emerald-600 text-white py-5 rounded-full font-black text-xs uppercase tracking-[0.3em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+            <svg id="refresh-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+            Sync Data
+        </button>
+    </div>
+
+    <!-- Navigation Dock -->
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[90%] max-w-sm z-50">
+        <div class="glass bottom-dock rounded-full p-2 flex justify-between items-center px-4 border border-white/10">
+            <button onclick="switchTab('live')" id="nav-live" class="p-4 rounded-full transition-all flex flex-col items-center gap-1 tab-active">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                <span class="text-[8px] font-black uppercase tracking-widest">Live</span>
+            </button>
+            
+            <button onclick="toggleNerdDrawer()" id="nav-stats" class="p-4 rounded-full transition-all flex flex-col items-center gap-1 opacity-40">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                <span class="text-[8px] font-black uppercase tracking-widest">Stats</span>
+            </button>
+
+            <button onclick="switchTab('forecast')" id="nav-forecast" class="p-4 rounded-full transition-all flex flex-col items-center gap-1 opacity-40">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                <span class="text-[8px] font-black uppercase tracking-widest">Outlook</span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let bzHistory = [];
+        let loc = { lat: 68.9, lon: 27.0 };
+        let isDarkMode = true;
+
+        function toggleRedMode() { document.body.classList.toggle('red-mode'); }
+        function toggleFlashlight() {
+            const el = document.getElementById('flashlight');
+            el.style.display = (el.style.display === 'block') ? 'none' : 'block';
+        }
+
+        function toggleTheme() {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode', !isDarkMode);
+            const icon = document.getElementById('theme-icon');
+            if (isDarkMode) {
+                icon.innerHTML = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+            } else {
+                icon.innerHTML = '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>';
+            }
+        }
+
+        function toggleNerdDrawer() {
+            const drawer = document.getElementById('nerd-drawer');
+            const navStats = document.getElementById('nav-stats');
+            drawer.classList.toggle('open');
+            navStats.classList.toggle('tab-active');
+            navStats.classList.toggle('opacity-40');
+        }
+
+        function switchTab(tab) {
+            const live = document.getElementById('live-page');
+            const forecast = document.getElementById('forecast-page');
+            const navL = document.getElementById('nav-live');
+            const navF = document.getElementById('nav-forecast');
+
+            if (tab === 'live') {
+                live.classList.remove('hidden-tab');
+                forecast.classList.add('hidden-tab');
+                navL.className = "p-4 rounded-full transition-all flex flex-col items-center gap-1 tab-active";
+                navF.className = "p-4 rounded-full transition-all flex flex-col items-center gap-1 opacity-40";
+            } else {
+                live.classList.add('hidden-tab');
+                forecast.classList.remove('hidden-tab');
+                navL.className = "p-4 rounded-full transition-all flex flex-col items-center gap-1 opacity-40";
+                navF.className = "p-4 rounded-full transition-all flex flex-col items-center gap-1 tab-active";
+            }
+            document.getElementById('nerd-drawer').classList.remove('open');
+            document.getElementById('nav-stats').classList.add('opacity-40');
+            document.getElementById('nav-stats').classList.remove('tab-active');
+        }
+
+        async function fetchAPI(url) {
+            try {
+                const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+                return await res.json();
+            } catch (e) { return null; }
+        }
+
+        async function updateData() {
+            const dot = document.getElementById('signal-dot');
+            const refresh = document.getElementById('refresh-icon');
+            dot.classList.add('signal-blink');
+            refresh.classList.add('animate-spin');
+
+            try {
+                const [mag, plasma, kp, weather, forecast] = await Promise.all([
+                    fetchAPI('https://services.swpc.noaa.gov/products/solar-wind/mag-5-minute.json'),
+                    fetchAPI('https://services.swpc.noaa.gov/products/solar-wind/plasma-5-minute.json'),
+                    fetchAPI('https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json'),
+                    fetchAPI(`https://api.open-meteo.com/v1/forecast?latitude=${loc.lat}&longitude=${loc.lon}&current=cloud_cover`),
+                    fetchAPI('https://services.swpc.noaa.gov/products/noaa-3-day-forecast.json')
+                ]);
+
+                const bz = parseFloat(mag?.filter(d => d[3] !== null).pop()?.[3]) || 0;
+                const speed = parseFloat(plasma?.filter(d => d[2] !== null).pop()?.[2]) || 400;
+                const kpVal = parseFloat(kp?.[kp.length-1]?.[1]) || 0;
+                const clouds = weather?.current?.cloud_cover ?? 0;
+                const eta = Math.round(1500000 / speed / 60);
+
+                bzHistory.push(bz);
+                if(bzHistory.length > 50) bzHistory.shift();
+
+                render(bz, speed, kpVal, clouds, eta, forecast);
+                dot.className = "w-2 h-2 rounded-full bg-emerald-500";
+            } catch (err) {
+                dot.className = "w-2 h-2 rounded-full bg-red-500";
+            } finally {
+                dot.classList.remove('signal-blink');
+                refresh.classList.remove('animate-spin');
+            }
+        }
+
+        function render(bz, speed, kp, clouds, eta, forecast) {
+            let score = 0;
+            if (bz < 0) score += 35 + (Math.abs(bz) * 8);
+            score += Math.min((kp / 9) * 35, 35);
+            score += Math.min((speed / 800) * 15, 15);
+            score += Math.max(0, 15 - (clouds / 6));
+            score = Math.round(Math.min(score, 100));
+
+            document.getElementById('main-score').innerText = score;
+            document.getElementById('bz-val').innerText = bz.toFixed(1);
+            document.getElementById('kp-val').innerText = kp.toFixed(1);
+            document.getElementById('speed-val').innerText = Math.round(speed) + ' km/s';
+            document.getElementById('cloud-val').innerText = clouds + '%';
+            document.getElementById('eta-val').innerHTML = eta + '<span class="text-sm ml-1 opacity-30">m</span>';
+
+            const bzCard = document.getElementById('bz-card');
+            if (bz < -5) bzCard.classList.add('good-pulse');
+            else bzCard.classList.remove('good-pulse');
+
+            const tip = document.getElementById('quick-tip');
+            if(score > 60) tip.innerText = "HIGH ACTIVITY: LOOK UP NOW";
+            else if(score > 30) tip.innerText = "MODERATE: USE CAMERA LONG EXPOSURE";
+            else tip.innerText = "QUIET: REST AND RECHARGE";
+
+            const graph = document.getElementById('graph-container');
+            graph.innerHTML = '';
+            bzHistory.forEach(v => {
+                const bar = document.createElement('div');
+                bar.className = `flex-1 rounded-t-sm ${v < 0 ? 'bg-emerald-500' : 'bg-slate-500/20'}`;
+                bar.style.height = Math.max(8, Math.abs(v) * 12 + 10) + '%';
+                graph.appendChild(bar);
+            });
+
+            const glow = document.getElementById('bg-glow');
+            if(score > 50) glow.style.backgroundColor = '#10b981';
+            else if(score > 20) glow.style.backgroundColor = '#f59e0b';
+            else glow.style.backgroundColor = '#ef4444';
+
+            if(forecast) {
+                const list = document.getElementById('forecast-list');
+                const valid = forecast.filter(r => r[0]?.match(/^\d{4}/));
+                list.innerHTML = '';
+                valid.slice(0, 3).forEach(row => {
+                    const d = new Date(row[0]);
+                    const max = Math.max(...row.slice(1).map(v => parseFloat(v) || 0));
+                    const div = document.createElement('div');
+                    div.className = 'flex justify-between items-center';
+                    div.innerHTML = `
+                        
